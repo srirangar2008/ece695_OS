@@ -1,0 +1,31 @@
+1. There are 32 semaphores and 64 locks available to use in DLXOS.
+2. lock_create() is the system call for creating a lock.
+   lock_acquire(lock_t) is the system call for acquiring a lock.
+   lock_release(lock_t) is the system call for releasing a lock.
+3. The semaphore is created using the system call sem_create which translates to a trap with number 450 and in turn calls the the SemCreate function which is the handler. 
+    i. Since grabbing a semaphore is an atomic operation, as a first step the interrupts are disabled.
+    ii. Then loop through the available semaphores to check if any of them is not in use. Once a free semaphore is found, set the use field and break.
+    iii. Re-enable the interrupts.
+    iv. Check if the sem varibale has reached max, if yes, return fail.
+    v. Init the semaphore to a given count value. Init the count as well as the process queue which could be waiting for the semaphore. If all success return the semaphore handle.
+4.  a. lock_acquire 
+        i. To make the process of acquring the lock atomic, the interrupts are disabled. 
+        ii. If the current process holds the lock, enable interrupts and return success.
+        iii. If another process holds the lock, Allocate a link with the currentPCB as the object.
+        iv. Add it to the waiting queue of the lock structure and suspend the process.
+        v. If lock is available, assign the pid field of the lock to the currentPid, enable interrupts and return success.
+    b. lock_release
+        i. Disable Interrupt. If the pid menioned in the lock does not match the process trying to release the lock, return failure.
+        ii. If the process waiting queue is not empty, pick up the first entry from the process waiting queue, get the PCB from the entry, remove the entry from the queue, get the pid and then signal for process wake up.
+        iii. Re-enable interrupts and return success.
+    c. sem_wait
+        i. Disable interrupts. If the sem count is <= 0, allocate a link for the current process, add it to the waiting queue of the semaphore, enable interrupts
+            and put the process to sleep.
+        ii. If sem_count > 0, decrement the counter and return success.
+    d. sem_signal 
+        i. Disable interrupts. Increment the sem_count. If the sem_count is >0, check the waiting process queue. If its not empty, extract the first element, read the PCB object, remove that element from the queue, and wake up the read PCB(process).
+        ii. Decrement the counter on behalf of the acquring process.
+        iii. Re-enable the interrupts and return success.
+5. A handle is a value that is returned on the successful creation of a semaphore. In DLXOS there is a array of Sem structure and the number is limited to 32. The handle returned by the SemCreate function is actually the index of one of the objects in the sems Array. So when sem_wait or sem_signal is called, this handle is used to locate the index of the semaphore in the sems Array and perform operations on that particular Sem object. The conversion from int to Sem* is done by the intermediate functions which are called in the trap handler of sem_signal and sem_wait.
+
+    
